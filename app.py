@@ -38,7 +38,7 @@ if not taux_cols:
     st.error("Aucune colonne 'Taux de chomage ...' trouvée dans le fichier Excel.")
     st.stop()
 
-    # Passage du format large au format long
+# Passage du format large au format long
 df_long = chomage_df.melt(
     id_vars=["Département"],
     value_vars=taux_cols,
