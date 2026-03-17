@@ -14,68 +14,68 @@ st.markdown(
     """
 <style>
 .stApp {
-  background: radial-gradient(1200px 800px at 20% 0%, #111827 0%, #0b0f15 45%, #090c12 100%);
-  color: #e5e7eb;
+background: radial-gradient(1200px 800px at 20% 0%, #111827 0%, #0b0f15 45%, #090c12 100%);
+color: #e5e7eb;
 }
 .block-container {
-  padding-top: 1.6rem;
-  padding-bottom: 3rem;
-  max-width: 1200px;
+padding-top: 1.6rem;
+padding-bottom: 3rem;
+max-width: 1200px;
 }
 h1 {
-  font-weight: 700;
-  letter-spacing: -0.02em;
+font-weight: 700;
+letter-spacing: -0.02em;
 }
 h2, h3 {
-  color: #e2e8f0;
-  font-weight: 600;
+color: #e2e8f0;
+font-weight: 600;
 }
 div[data-testid="stMetric"] {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
-  padding: 14px 16px;
+background: rgba(255,255,255,0.03);
+border: 1px solid rgba(255,255,255,0.08);
+border-radius: 14px;
+padding: 14px 16px;
 }
 div[data-testid="stMetricLabel"] p { color: #cbd5e1; }
 div[data-testid="stMetricValue"] { font-weight: 700; }
 div[data-testid="stPlotlyChart"] {
-  background: rgba(255,255,255,0.01);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px;
-  padding: 6px;
+background: rgba(255,255,255,0.01);
+border: 1px solid rgba(255,255,255,0.06);
+border-radius: 16px;
+padding: 6px;
 }
 .metric-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
-  padding: 14px 16px;
-  height: 140px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
+background: rgba(255,255,255,0.03);
+border: 1px solid rgba(255,255,255,0.08);
+border-radius: 14px;
+padding: 14px 16px;
+height: 140px;
+display: flex;
+flex-direction: column;
+justify-content: center;
+gap: 8px;
 }
 .metric-label {
-  color: #cbd5e1;
-  font-size: 0.9rem;
-  margin-bottom: 6px;
+color: #cbd5e1;
+font-size: 0.9rem;
+margin-bottom: 6px;
 }
 .metric-value {
-  color: #f8fafc;
-  font-weight: 700;
-  line-height: 1.2;
-  word-break: break-word;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+color: #f8fafc;
+font-weight: 700;
+line-height: 1.2;
+word-break: break-word;
+display: -webkit-box;
+-webkit-box-orient: vertical;
+overflow: hidden;
 }
 .metric-value--number {
-  font-size: 2.2rem;
-  -webkit-line-clamp: 1;
+font-size: 2.2rem;
+-webkit-line-clamp: 1;
 }
 .metric-value--name {
-  font-size: 1.55rem;
-  -webkit-line-clamp: 3;
+font-size: 1.55rem;
+-webkit-line-clamp: 3;
 }
 .section-spacer { height: 18px; }
 </style>
@@ -94,10 +94,10 @@ st.caption(
 # -----------------------------
 # Chargement des données
 # -----------------------------
-temperature_df = pd.read_csv("pages/tables/Temperature_2040_df.csv")
-flood_df = pd.read_csv("pages/tables/Flood_df.csv")
-water_df = pd.read_csv("pages/tables/water_pressure_df.csv")
-old_df = pd.read_csv("pages/tables/Old_df.csv")
+temperature_df = pd.read_csv("pages/tables/Climat/Temperature_2040_df.csv")
+flood_df = pd.read_csv("pages/tables/Climat/Flood_df.csv")
+water_df = pd.read_csv("pages/tables/Climat/water_pressure_df.csv")
+old_df = pd.read_csv("pages/tables/Transition_démographique/Old_df.csv")
 
 old_df["code"] = old_df["code"].astype(str).str.strip().str.upper()
 old_df["code"] = old_df["code"].apply(lambda code: code.zfill(2) if code.isdigit() else code)
@@ -166,6 +166,7 @@ defaults = {
 }
 for key, value in defaults.items():
     st.session_state.setdefault(key, value)
+st.session_state.setdefault("selected_codes", [])
 
 if st.sidebar.button("Preset Global (0.7 / 0.3)"):
     for key, value in defaults.items():
@@ -382,8 +383,8 @@ with col1:
     st.markdown(
         f"""
         <div class="metric-card">
-          <div class="metric-label">{indice_label} moyen France</div>
-          <div class="metric-value metric-value--number">{avg_value}</div>
+        <div class="metric-label">{indice_label} moyen France</div>
+        <div class="metric-value metric-value--number">{avg_value}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -393,8 +394,8 @@ with col2:
     st.markdown(
         f"""
         <div class="metric-card">
-          <div class="metric-label">Meilleur département</div>
-          <div class="metric-value metric-value--name">{best_dep}</div>
+        <div class="metric-label">Meilleur département</div>
+        <div class="metric-value metric-value--name">{best_dep}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -404,8 +405,8 @@ with col3:
     st.markdown(
         f"""
         <div class="metric-card">
-          <div class="metric-label">Moins favorable</div>
-          <div class="metric-value metric-value--name">{worst_dep}</div>
+        <div class="metric-label">Moins favorable</div>
+        <div class="metric-value metric-value--name">{worst_dep}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -500,6 +501,27 @@ fig.update_layout(
     },
 )
 
+selected_codes_map = st.session_state.get("selected_codes", [])
+if selected_codes_map:
+    selected_codes_map = [
+        code.zfill(2) if str(code).isdigit() else str(code)
+        for code in selected_codes_map
+    ]
+    fig.add_trace(
+        go.Choropleth(
+            geojson=departements,
+            locations=selected_codes_map,
+            featureidkey="properties.code",
+            z=[1] * len(selected_codes_map),
+            colorscale=[[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]],
+            showscale=False,
+            marker_line_color="rgba(248,250,252,0.95)",
+            marker_line_width=2.2,
+            hoverinfo="skip",
+            name="Sélection",
+        )
+    )
+
 # -----------------------------
 # Affichage carte
 # -----------------------------
@@ -554,11 +576,13 @@ selected_codes = st.multiselect(
     options=options_df["code"].tolist(),
     format_func=lambda code: code_to_label.get(code, code),
     placeholder="Tape pour rechercher un département...",
+    key="selected_codes",
 )
 st.caption("Cette sélection filtre le radar et le classement.")
 
 if len(selected_codes) > 4:
     selected_codes = selected_codes[:4]
+    st.session_state["selected_codes"] = selected_codes
     st.info("Comparaison limitée à 4 départements pour garder le radar lisible.")
 
 filtered_df = climate_df
@@ -734,6 +758,11 @@ fig_hist.update_layout(
     yaxis_title="Nombre de départements",
 )
 fig_hist.update_traces(marker_line_color="rgba(255,255,255,0.15)", marker_line_width=1)
+fig_hist.update_traces(
+    hoverinfo="skip",
+    hovertemplate=None,
+    selector=dict(type="histogram"),
+)
 fig_hist.add_vline(
     x=mean_val,
     line_width=2,
@@ -767,6 +796,37 @@ fig_hist.add_vline(
     annotation_position="top right",
 )
 
+selected_marks = climate_df[
+    climate_df["code"].isin(selected_codes)
+][["departement", "departement_label", "code", "indice_affiche"]].dropna()
+if not selected_marks.empty:
+    marker_colors = ["#38bdf8", "#a855f7", "#f97316", "#22c55e"]
+    fig_hist.add_trace(
+        go.Scatter(
+            x=selected_marks["indice_affiche"],
+            y=[0] * len(selected_marks),
+            mode="markers",
+            text=selected_marks["departement"],
+            marker={
+                "size": 9,
+                "color": marker_colors[: len(selected_marks)],
+                "line": {"width": 1, "color": "rgba(255,255,255,0.6)"},
+            },
+            showlegend=False,
+            hovertemplate="%{text}<br>Indice: %{x:.2f}<extra></extra>",
+        )
+    )
+    for idx, row in enumerate(selected_marks.itertuples(index=False)):
+        label = f"{row.departement}"
+        fig_hist.add_vline(
+            x=row.indice_affiche,
+            line_width=2,
+            line_dash="dash",
+            line_color=marker_colors[idx % len(marker_colors)],
+            annotation_text=label,
+            annotation_position="top",
+        )
+
 st.plotly_chart(fig_hist, use_container_width=True)
 
 fig_box = px.box(
@@ -786,5 +846,22 @@ fig_box.update_layout(
     yaxis_title="",
 )
 fig_box.update_traces(line_color="#38bdf8", fillcolor="rgba(56,189,248,0.25)")
+
+if not selected_marks.empty:
+    fig_box.add_trace(
+        go.Scatter(
+            x=selected_marks["indice_affiche"],
+            y=[0] * len(selected_marks),
+            mode="markers",
+            text=selected_marks["departement"],
+            marker={
+                "size": 9,
+                "color": marker_colors[: len(selected_marks)],
+                "line": {"width": 1, "color": "rgba(255,255,255,0.6)"},
+            },
+            name="Sélection",
+            hovertemplate="%{text}<br>Indice: %{x:.2f}<extra></extra>",
+        )
+    )
 
 st.plotly_chart(fig_box, use_container_width=True)
