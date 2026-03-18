@@ -1159,7 +1159,7 @@ else:
     with st.expander("Détails scientifiques", expanded=False):
         st.markdown(
             f"""
-**Focus local**  
+**Focus local**
 {focus if focus else "Pas de focus spécifique défini pour ce département."}
 """
         )
