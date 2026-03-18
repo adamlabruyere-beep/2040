@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pandas as pd
 
 from utils.excel_helpers import charger_excel, colonnes_sans_unnamed, nettoyer_colonnes
@@ -229,15 +232,82 @@ def _score_sante():
     ]
 
 
+def _score_internet():
+    df = pd.read_csv("pages/tables/Internet.csv")
+    df["Dep_name"] = df["Dep_name"].replace(
+        {
+            "Côtes d'Armor": "Côtes-d'Armor",
+            "Seine-St-Denis": "Seine-Saint-Denis",
+            "Val-D'Oise": "Val-d'Oise",
+        }
+    )
+    df["Coefficient"] = pd.to_numeric(df["Coefficient"], errors="coerce")
+    df["Fibre"] = pd.to_numeric(df["Fibre"], errors="coerce")
+    df["Score internet"] = _normaliser_serie(df["Coefficient"]).round(4)
+    return df.rename(columns={"Dep_name": "Département"})[
+        ["Département", "Score internet", "Coefficient", "Fibre", "Nombre de locaux"]
+    ]
+
+
+def _score_criminalite():
+    df = pd.read_csv("pages/tables/CrimebyDept_2040.csv")
+    df["Coefficient"] = pd.to_numeric(df["Coefficient"], errors="coerce")
+    df["nombre"] = pd.to_numeric(df["nombre"], errors="coerce")
+    df["Score criminalité"] = _normaliser_serie(df["Coefficient"]).round(4)
+    return df.rename(columns={"dep_name": "Département"})[
+        ["Département", "Score criminalité", "Coefficient", "nombre"]
+    ]
+
+
+def _score_education():
+    geojson_departements = json.loads(
+        Path("pages/tables/departements.geojson").read_text(encoding="utf-8")
+    )
+    code_to_name = {
+        feature["properties"]["code"]: feature["properties"]["nom"]
+        for feature in geojson_departements["features"]
+    }
+
+    df = pd.read_csv("pages/tables/Education.csv")
+    df["num_dep"] = df["num_dep"].astype(str).str.zfill(2)
+    df["Département"] = df["num_dep"].map(code_to_name)
+    df["coefficient"] = pd.to_numeric(df["coefficient"], errors="coerce")
+    df["nb_stud_total"] = pd.to_numeric(df["nb_stud_total"], errors="coerce")
+    df["POP_2024"] = pd.to_numeric(df["POP_2024"], errors="coerce")
+    df["Score éducation"] = _normaliser_serie(df["coefficient"]).round(4)
+    return df[
+        ["Département", "Score éducation", "coefficient", "nb_stud_total", "POP_2024"]
+    ]
+
+
+def _score_immobilier():
+    df = pd.read_csv("pages/tables/Real_Estate_Prices.csv", sep=";")
+    df["Coefficient"] = pd.to_numeric(df["Coefficient"], errors="coerce")
+    df["Price2025"] = pd.to_numeric(df["Price2025"], errors="coerce")
+    df["Price2040"] = pd.to_numeric(df["Price2040"], errors="coerce")
+    df["Score immobilier"] = _normaliser_serie(df["Coefficient"]).round(4)
+    return df.rename(columns={"dep_name": "Département"})[
+        ["Département", "Score immobilier", "Coefficient", "Price2025", "Price2040"]
+    ]
+
+
 def calculer_scores_departements():
     score_emploi = _score_emploi()
     score_etudiants = _score_etudiants()
     score_revenu = _score_revenu()
     score_sante = _score_sante()
+    score_internet = _score_internet()
+    score_criminalite = _score_criminalite()
+    score_education = _score_education()
+    score_immobilier = _score_immobilier()
 
-    scores = score_emploi.merge(score_etudiants, on="Département", how="inner")
-    scores = scores.merge(score_revenu, on="Département", how="inner")
-    scores = scores.merge(score_sante, on="Département", how="inner")
+    scores = score_revenu.merge(score_emploi, on="Département", how="left")
+    scores = scores.merge(score_etudiants, on="Département", how="left")
+    scores = scores.merge(score_sante, on="Département", how="left")
+    scores = scores.merge(score_internet, on="Département", how="left")
+    scores = scores.merge(score_criminalite, on="Département", how="left")
+    scores = scores.merge(score_education, on="Département", how="left")
+    scores = scores.merge(score_immobilier, on="Département", how="left")
 
     scores["Score global"] = _moyenne_ponderee_disponible(
         scores,
@@ -246,6 +316,10 @@ def calculer_scores_departements():
             "Score étudiants": 1.0,
             "Score revenu": 1.0,
             "Score santé": 1.0,
+            "Score internet": 1.0,
+            "Score criminalité": 1.0,
+            "Score éducation": 1.0,
+            "Score immobilier": 1.0,
         },
     )
 

@@ -21,6 +21,10 @@ themes = {
     "Étudiants": "Score étudiants",
     "Revenu": "Score revenu",
     "Santé": "Score santé",
+    "Internet": "Score internet",
+    "Criminalité": "Score criminalité",
+    "Éducation": "Score éducation",
+    "Immobilier": "Score immobilier",
 }
 
 selection_themes = st.multiselect(
@@ -87,6 +91,10 @@ fig = px.choropleth(
         "Score étudiants": ":.2f",
         "Score revenu": ":.2f",
         "Score santé": ":.2f",
+        "Score internet": ":.2f",
+        "Score criminalité": ":.2f",
+        "Score éducation": ":.2f",
+        "Score immobilier": ":.2f",
         "Score global personnalisé": ":.2f",
     },
     color_continuous_scale=[
@@ -136,6 +144,10 @@ st.dataframe(
             "Score étudiants",
             "Score revenu",
             "Score santé",
+            "Score internet",
+            "Score criminalité",
+            "Score éducation",
+            "Score immobilier",
             "Score global personnalisé",
         ]
     ].style.format(
@@ -144,6 +156,10 @@ st.dataframe(
             "Score étudiants": "{:.2f}",
             "Score revenu": "{:.2f}",
             "Score santé": "{:.2f}",
+            "Score internet": "{:.2f}",
+            "Score criminalité": "{:.2f}",
+            "Score éducation": "{:.2f}",
+            "Score immobilier": "{:.2f}",
             "Score global personnalisé": "{:.2f}",
         }
     ),
