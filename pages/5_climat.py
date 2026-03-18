@@ -6,6 +6,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from utils.excel_helpers import charger_csv, charger_geojson
+
 st.set_page_config(page_title="Laboratoire climat 2040", layout="wide")
 
 st.markdown(
@@ -77,9 +79,9 @@ st.caption(
 # -----------------------------
 # Load data
 # -----------------------------
-temperature_df = pd.read_csv("pages/tables/Climat/Temperature_2040_df.csv")
-flood_df = pd.read_csv("pages/tables/Climat/Flood_df.csv")
-water_df = pd.read_csv("pages/tables/Climat/water_pressure_df.csv")
+temperature_df = charger_csv("pages/tables/Temperature_2040_df.csv")
+flood_df = charger_csv("pages/tables/Flood_df.csv")
+water_df = charger_csv("pages/tables/water_pressure_df.csv")
 
 # Base scores
 
@@ -114,9 +116,19 @@ climate_df["code"] = climate_df["code"].apply(
     lambda code: code.zfill(2) if code.isdigit() else code
 )
 
+# Demographic data (same as Explorer)
+old_df = charger_csv("pages/tables/Old_df.csv")
+old_df["code"] = old_df["code"].astype(str).str.strip().str.upper()
+old_df["code"] = old_df["code"].apply(
+    lambda code: code.zfill(2) if code.isdigit() else code
+)
+old_df = old_df[old_df["code"] != "M"]
+old_df["score_vieillissement"] = pd.to_numeric(
+    old_df["indice de vieillissement"], errors="coerce"
+)
+
 # Load geojson for names
-with open("pages/tables/departements.geojson") as f:
-    departements = json.load(f)
+departements = charger_geojson("pages/tables/departements.geojson")
 
 code_to_nom = {
     feature["properties"]["code"]: feature["properties"]["nom"]
@@ -1716,5 +1728,4 @@ else:
         use_container_width=True,
         hide_index=True,
     )
-
-
+######
