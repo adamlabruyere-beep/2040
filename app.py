@@ -116,6 +116,17 @@ col1.metric("Départements comparés", f"{scores['Département'].nunique()}")
 col2.metric("Meilleur département", scores.iloc[0]["Département"])
 col3.metric("Score du leader", f"{scores.iloc[0]['Score global personnalisé']:.2f}")
 
+st.subheader("Sélection des départements")
+departements_selectionnes = st.multiselect(
+    "Sélectionne jusqu'à 4 départements",
+    options=scores["Département"].tolist(),
+    default=[],
+    placeholder="Tape pour rechercher un département...",
+)
+if len(departements_selectionnes) > 4:
+    departements_selectionnes = departements_selectionnes[:4]
+    st.info("Comparaison limitée à 4 départements pour garder la lecture lisible.")
+
 color_scale = [
     (0.0, "#991b1b"),
     (0.2, "#c2410c"),
@@ -175,6 +186,21 @@ fig.update_traces(
     marker_line_width=0.8,
     hovertemplate=hovertemplate,
 )
+if departements_selectionnes:
+    fig.add_trace(
+        go.Choropleth(
+            geojson=geojson_departements,
+            locations=departements_selectionnes,
+            featureidkey="properties.nom",
+            z=[1] * len(departements_selectionnes),
+            colorscale=[[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]],
+            showscale=False,
+            marker_line_color="rgba(248,250,252,0.95)",
+            marker_line_width=2.4,
+            hoverinfo="skip",
+            name="Sélection",
+        )
+    )
 fig.update_layout(
     template="plotly_dark",
     height=680,
@@ -220,18 +246,6 @@ with col_flop:
         use_container_width=True,
         hide_index=True,
     )
-
-st.divider()
-st.subheader("Sélection des départements")
-departements_selectionnes = st.multiselect(
-    "Sélectionne jusqu'à 4 départements",
-    options=scores["Département"].tolist(),
-    default=[],
-    placeholder="Tape pour rechercher un département...",
-)
-if len(departements_selectionnes) > 4:
-    departements_selectionnes = departements_selectionnes[:4]
-    st.info("Comparaison limitée à 4 départements pour garder le radar lisible.")
 
 filtered_df = scores[scores["Département"].isin(departements_selectionnes)] if departements_selectionnes else scores
 
