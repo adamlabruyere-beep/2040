@@ -1,5 +1,3 @@
-import json
-
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -73,15 +71,15 @@ margin-bottom: 6px;
 
 st.title("Analyse climatique 2040")
 st.caption(
-    "Évaluation des risques climatiques par département : interactions, corrélations et profils territoriaux."
+    "Évaluation des risques climatiques par département : lecture cartographique, comparaison rapide et profils territoriaux."
 )
 
 # -----------------------------
 # Load data
 # -----------------------------
-temperature_df = charger_csv("pages/tables/Temperature_2040_df.csv")
-flood_df = charger_csv("pages/tables/Flood_df.csv")
-water_df = charger_csv("pages/tables/water_pressure_df.csv")
+temperature_df = charger_csv("pages/tables/Climat/Temperature_2040_df.csv")
+flood_df = charger_csv("pages/tables/Climat/Flood_df.csv")
+water_df = charger_csv("pages/tables/Climat/water_pressure_df.csv")
 
 # Base scores
 
@@ -114,17 +112,6 @@ climate_df["score_temperature"] = climate_df["score_temperature"].fillna(0)
 climate_df["code"] = climate_df["code"].astype(str).str.strip().str.upper()
 climate_df["code"] = climate_df["code"].apply(
     lambda code: code.zfill(2) if code.isdigit() else code
-)
-
-# Demographic data (same as Explorer)
-old_df = charger_csv("pages/tables/Old_df.csv")
-old_df["code"] = old_df["code"].astype(str).str.strip().str.upper()
-old_df["code"] = old_df["code"].apply(
-    lambda code: code.zfill(2) if code.isdigit() else code
-)
-old_df = old_df[old_df["code"] != "M"]
-old_df["score_vieillissement"] = pd.to_numeric(
-    old_df["indice de vieillissement"], errors="coerce"
 )
 
 # Load geojson for names
@@ -190,12 +177,6 @@ else:
     color_scale = "YlOrRd"
     mode_caption = "1 = risque élevé"
 
-label_map = {
-    temp_col: temp_label,
-    water_col: water_label,
-    flood_col: flood_label,
-}
-
 poids_total = w_temp + w_water + w_flood
 if poids_total == 0:
     st.warning("La somme des poids ne peut pas être nulle.")
@@ -207,11 +188,6 @@ weighted_sum = (
     + w_flood * climate_df[flood_col]
 )
 climate_df["indice_total"] = weighted_sum / poids_total
-
-if is_favorable:
-    climate_df["indice_resilience"] = climate_df["indice_total"]
-else:
-    climate_df["indice_resilience"] = 1 - climate_df["indice_total"]
 
 # -----------------------------
 # Carte rapide & cadran d'explication
@@ -251,11 +227,14 @@ selected_dept_codes = st.multiselect(
 )
 st.caption(
     "Le premier département sélectionné pilote les détails contextuels. "
-    "Tous les départements sélectionnés sont comparés sur le radar et surlignés sur la carte."
+    "Tous les départements sélectionnés sont comparés sur le radar, surlignés sur la carte "
+    "et repris dans les analyses ci-dessous."
 )
 
 selected_dept_code = selected_dept_codes[0] if selected_dept_codes else ""
 comparison_dept_codes = selected_dept_codes[1:] if len(selected_dept_codes) > 1 else []
+has_selection = bool(selected_dept_codes)
+selected_order_map = {code: idx for idx, code in enumerate(selected_dept_codes)}
 
 col_map, col_radar = st.columns(2)
 
@@ -277,6 +256,10 @@ fig_radar = go.Figure()
 radar_codes = [selected_dept_code] if selected_dept_code else []
 radar_codes.extend(comparison_dept_codes)
 radar_palette = ["#38bdf8", "#f59e0b", "#22c55e", "#f43f5e", "#a78bfa", "#06b6d4"]
+selected_color_map = {
+    code: radar_palette[idx % len(radar_palette)]
+    for idx, code in enumerate(selected_dept_codes)
+}
 
 for idx, code in enumerate(radar_codes):
     dept_row = map_df[map_df["code"] == code].iloc[0]
@@ -1183,41 +1166,6 @@ else:
 
 st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
 
-vulnerability_df = pd.DataFrame(
-    [
-        {
-            "Département": "Vaucluse (84)",
-            "Facteur limitant principal": "Stress hydrique",
-            "Cause scientifique": "Pressions agricoles + évapotranspiration élevée.",
-        },
-        {
-            "Département": "Vienne (86)",
-            "Facteur limitant principal": "Ressource en eau",
-            "Cause scientifique": "Seuil du Poitou : zone de transition pauvre en stockage.",
-        },
-        {
-            "Département": "Rhône (69)",
-            "Facteur limitant principal": "Chaleur",
-            "Cause scientifique": "Effet de cuvette lyonnaise + forte minéralisation.",
-        },
-        {
-            "Département": "Eure-et-Loir (28)",
-            "Facteur limitant principal": "Ressource en eau",
-            "Cause scientifique": "Dépendance à la nappe de Beauce, sensible aux prélèvements.",
-        },
-    ]
-)
-with st.expander("📋 Tableau de synthèse des vulnérabilités spécifiques", expanded=False):
-    st.dataframe(vulnerability_df, use_container_width=True, hide_index=True)
-    st.download_button(
-        "Exporter vers Sheets (CSV)",
-        vulnerability_df.to_csv(index=False).encode("utf-8"),
-        file_name="vulnerabilites_departements.csv",
-        mime="text/csv",
-    )
-
-st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
-
 # -----------------------------
 # Risk interaction analysis
 # -----------------------------
@@ -1268,7 +1216,33 @@ for col, (x_col, y_col, x_label, y_label) in zip(cols, scatter_specs):
             flood_col,
         ],
     )
-    fig.update_traces(hovertemplate=hover_template, marker={"size": 7, "opacity": 0.85})
+    base_marker = {"size": 7, "opacity": 0.3 if has_selection else 0.85}
+    fig.update_traces(hovertemplate=hover_template, marker=base_marker)
+
+    if has_selection:
+        for code in selected_dept_codes:
+            selected_row = climate_df[climate_df["code"] == code]
+            if selected_row.empty:
+                continue
+            fig.add_trace(
+                go.Scatter(
+                    x=selected_row[x_col],
+                    y=selected_row[y_col],
+                    mode="markers",
+                    name=selected_row["departement_label"].iloc[0],
+                    showlegend=False,
+                    customdata=selected_row[
+                        ["departement_label", temp_col, water_col, flood_col]
+                    ].to_numpy(),
+                    hovertemplate=hover_template,
+                    marker={
+                        "size": 12,
+                        "color": selected_color_map.get(code, "#f8fafc"),
+                        "line": {"color": "#ffffff", "width": 2},
+                    },
+                )
+            )
+
     fig.update_layout(
         template="plotly_dark",
         height=360,
@@ -1277,30 +1251,6 @@ for col, (x_col, y_col, x_label, y_label) in zip(cols, scatter_specs):
     )
     with col:
         st.plotly_chart(fig, use_container_width=True)
-
-st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
-
-# -----------------------------
-# Correlation matrix
-# -----------------------------
-st.subheader("Corrélations climatiques")
-
-corr_df = climate_df[[temp_col, water_col, flood_col]].corr()
-corr_df = corr_df.rename(index=label_map, columns=label_map)
-fig_corr = px.imshow(
-    corr_df,
-    text_auto=".2f",
-    color_continuous_scale="RdBu",
-    zmin=-1,
-    zmax=1,
-    labels={"color": "Corrélation"},
-)
-fig_corr.update_layout(
-    template="plotly_dark",
-    height=420,
-    margin=dict(l=20, r=20, t=40, b=20),
-)
-st.plotly_chart(fig_corr, use_container_width=True)
 
 st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
 
@@ -1317,143 +1267,37 @@ insights_df = climate_df[
 ].copy()
 insights_df["axis_min"] = insights_df[axis_cols].min(axis=1)
 insights_df["axis_max"] = insights_df[axis_cols].max(axis=1)
-insights_df["axis_mean"] = insights_df[axis_cols].mean(axis=1)
-insights_df["axis_std"] = insights_df[axis_cols].std(axis=1)
-insights_df["balance_score"] = insights_df["axis_mean"] - 0.5 * insights_df["axis_std"]
 insights_df["spread"] = insights_df["axis_max"] - insights_df["axis_min"]
 
-if is_favorable:
-    multi_title = "Top multi‑confort (haut sur les 3 axes)"
-    balanced_title = "Top équilibrés (bons sur les 3 axes)"
-    tradeoff_title = "Plus gros trade‑offs (forts écarts entre axes)"
-    outlier_title = "Très bon score global mais point faible marqué"
+tradeoffs = insights_df.copy()
+tradeoffs["Axe fort"] = tradeoffs[axis_cols].idxmax(axis=1).map(axis_labels)
+tradeoffs["Axe faible"] = tradeoffs[axis_cols].idxmin(axis=1).map(axis_labels)
+if has_selection:
+    tradeoffs_view = tradeoffs[tradeoffs["code"].isin(selected_dept_codes)].copy()
+    tradeoffs_view["selection_order"] = tradeoffs_view["code"].map(selected_order_map)
+    tradeoffs_view = tradeoffs_view.sort_values("selection_order").drop(
+        columns="selection_order"
+    )
+    st.caption("Lecture des départements sélectionnés : axe fort, axe faible et écart entre axes.")
 else:
-    multi_title = "Top multi‑risques (haut sur les 3 axes)"
-    balanced_title = "Top équilibrés (risques élevés et homogènes)"
-    tradeoff_title = "Plus gros trade‑offs (forts écarts entre axes)"
-    outlier_title = "Bon score global mais risque extrême caché"
-
-col_a, col_b = st.columns(2)
-
-with col_a:
-    st.caption(multi_title)
-    st.dataframe(
-        insights_df.sort_values("axis_min", ascending=False)
-        .head(10)[["departement", "code", "indice_total"] + axis_cols]
-        .rename(
-            columns={
-                "indice_total": total_label,
-                temp_col: temp_label,
-                water_col: water_label,
-                flood_col: flood_label,
-            }
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-with col_b:
-    st.caption(balanced_title)
-    st.dataframe(
-        insights_df.sort_values("balance_score", ascending=False)
-        .head(10)[["departement", "code", "indice_total", "axis_std"] + axis_cols]
-        .rename(
-            columns={
-                "indice_total": total_label,
-                "axis_std": "Écart type (axes)",
-                temp_col: temp_label,
-                water_col: water_label,
-                flood_col: flood_label,
-            }
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-col_c, col_d = st.columns(2)
-
-with col_c:
-    st.caption(tradeoff_title)
-    tradeoffs = insights_df.copy()
-    tradeoffs["Axe fort"] = tradeoffs[axis_cols].idxmax(axis=1).map(axis_labels)
-    tradeoffs["Axe faible"] = tradeoffs[axis_cols].idxmin(axis=1).map(axis_labels)
-    st.dataframe(
-        tradeoffs.sort_values("spread", ascending=False)
-        .head(10)[
-            [
-                "departement",
-                "code",
-                "Axe fort",
-                "Axe faible",
-                "spread",
-                "indice_total",
-            ]
-        ]
-        .rename(
-            columns={
-                "spread": "Écart max",
-                "indice_total": total_label,
-            }
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-with col_d:
-    st.caption(outlier_title)
-    if is_favorable:
-        overall_good = insights_df["indice_total"] >= insights_df["indice_total"].quantile(0.75)
-        axis_bad = (insights_df[axis_cols] <= climate_df[axis_cols].quantile(0.2)).any(
-            axis=1
-        )
-        outliers = insights_df[overall_good & axis_bad].copy()
-        outliers["Axe critique"] = outliers[axis_cols].idxmin(axis=1).map(axis_labels)
-        outliers["Score critique"] = outliers[axis_cols].min(axis=1)
-        outliers = outliers.sort_values("Score critique", ascending=True)
-    else:
-        overall_good = insights_df["indice_total"] <= insights_df["indice_total"].quantile(0.25)
-        axis_bad = (insights_df[axis_cols] >= climate_df[axis_cols].quantile(0.8)).any(
-            axis=1
-        )
-        outliers = insights_df[overall_good & axis_bad].copy()
-        outliers["Axe critique"] = outliers[axis_cols].idxmax(axis=1).map(axis_labels)
-        outliers["Score critique"] = outliers[axis_cols].max(axis=1)
-        outliers = outliers.sort_values("Score critique", ascending=False)
-
-    if outliers.empty:
-        st.info("Aucun cas net selon les seuils actuels.")
-    else:
-        st.dataframe(
-            outliers.head(10)[
-                ["departement", "code", "indice_total", "Axe critique", "Score critique"]
-            ].rename(columns={"indice_total": total_label}),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
-
-# -----------------------------
-# Cumulative climate score
-# -----------------------------
-if is_favorable:
-    st.subheader("Indice de confort climatique")
-    st.caption("Top 10 des départements avec le confort climatique le plus élevé.")
-else:
-    st.subheader("Indice de risque climatique")
-    st.caption("Top 10 des départements avec le risque climatique cumulé le plus élevé.")
-
-top_total = climate_df.sort_values("indice_total", ascending=False).head(10)
+    tradeoffs_view = tradeoffs.sort_values("spread", ascending=False).head(10)
+    st.caption("Départements avec les écarts les plus marqués entre axes climatiques.")
 
 st.dataframe(
-    top_total[
-        ["departement", "code", "indice_total", temp_col, water_col, flood_col]
-    ].rename(
+    tradeoffs_view[
+        [
+            "departement",
+            "code",
+            "Axe fort",
+            "Axe faible",
+            "spread",
+            "indice_total",
+        ]
+    ]
+    .rename(
         columns={
+            "spread": "Écart max",
             "indice_total": total_label,
-            temp_col: temp_label,
-            water_col: water_label,
-            flood_col: flood_label,
         }
     ),
     use_container_width=True,
@@ -1463,59 +1307,28 @@ st.dataframe(
 st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
 
 # -----------------------------
-# Extreme territories
+# Cumulative climate score
 # -----------------------------
-if is_favorable:
-    st.subheader("Territoires favorables par indicateur")
+st.subheader("Classement synthétique")
+
+top_total = (
+    climate_df.sort_values("indice_total", ascending=False)
+    [["departement", "code", "indice_total"]]
+    .reset_index(drop=True)
+)
+top_total.insert(0, "Rang", range(1, len(top_total) + 1))
+
+if has_selection:
+    ranking_view = top_total[top_total["code"].isin(selected_dept_codes)].copy()
+    ranking_view["selection_order"] = ranking_view["code"].map(selected_order_map)
+    ranking_view = ranking_view.sort_values("selection_order").drop(columns="selection_order")
+    st.caption("Position des départements sélectionnés dans le classement national.")
 else:
-    st.subheader("Territoires vulnérables par indicateur")
+    ranking_view = top_total.head(10)
+    st.caption("Top 10 des départements les mieux classés sur l'indice climatique global.")
 
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.caption(temp_label)
-    st.dataframe(
-        climate_df.sort_values(temp_col, ascending=False)
-        .head(10)[["departement", "code", temp_col]]
-        .rename(columns={temp_col: temp_label}),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-with col2:
-    st.caption(water_label)
-    st.dataframe(
-        climate_df.sort_values(water_col, ascending=False)
-        .head(10)[["departement", "code", water_col]]
-        .rename(columns={water_col: water_label}),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-with col3:
-    st.caption(flood_label)
-    st.dataframe(
-        climate_df.sort_values(flood_col, ascending=False)
-        .head(10)[["departement", "code", flood_col]]
-        .rename(columns={flood_col: flood_label}),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
-
-# -----------------------------
-# Climate resilience
-# -----------------------------
-st.subheader("Index de résilience climatique")
-
-res_top = climate_df.sort_values("indice_resilience", ascending=False).head(10)
-
-st.caption("Top 10 des départements les plus résilients au risque climatique.")
 st.dataframe(
-    res_top[["departement", "code", "indice_resilience"]].rename(
-        columns={"indice_resilience": "Résilience"}
-    ),
+    ranking_view.rename(columns={"indice_total": total_label}),
     use_container_width=True,
     hide_index=True,
 )
@@ -1525,207 +1338,288 @@ st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
 # -----------------------------
 # Climate typology (clustering)
 # -----------------------------
-st.subheader("Typologies territoriales")
+with st.expander("Analyse avancée : typologies territoriales", expanded=False):
+    st.caption(
+        "Vue analyste : segmentation des départements selon les trois axes climatiques. "
+        "Sortie volontairement séparée du flux principal."
+    )
 
-features = climate_df[[temp_col, water_col, flood_col]].copy()
-features = features.fillna(features.mean())
+    features = climate_df[[temp_col, water_col, flood_col]].copy()
+    features = features.fillna(features.mean())
 
-cluster_notice = None
-cluster_error = None
-labels = None
-cluster_name_map = {}
+    cluster_notice = None
+    cluster_error = None
+    labels = None
 
-try:
-    from sklearn.cluster import KMeans
-    from sklearn.preprocessing import StandardScaler
-
-    X = StandardScaler().fit_transform(features)
-    labels = KMeans(n_clusters=4, n_init=10, random_state=42).fit_predict(X)
-except Exception:
     try:
-        def _standardize(values: np.ndarray) -> np.ndarray:
-            mean = np.nanmean(values, axis=0)
-            std = np.nanstd(values, axis=0)
-            std[std == 0] = 1.0
-            return (values - mean) / std
+        from sklearn.cluster import KMeans
+        from sklearn.preprocessing import StandardScaler
 
-        def _kmeans(
-            values: np.ndarray,
-            n_clusters: int,
-            n_init: int,
-            max_iter: int,
-            random_state: int,
-        ) -> np.ndarray:
-            rng = np.random.default_rng(random_state)
-            best_labels = None
-            best_inertia = None
+        X = StandardScaler().fit_transform(features)
+        labels = KMeans(n_clusters=4, n_init=10, random_state=42).fit_predict(X)
+    except Exception:
+        try:
+            def _standardize(values: np.ndarray) -> np.ndarray:
+                mean = np.nanmean(values, axis=0)
+                std = np.nanstd(values, axis=0)
+                std[std == 0] = 1.0
+                return (values - mean) / std
 
-            for _ in range(n_init):
-                if values.shape[0] >= n_clusters:
-                    init_idx = rng.choice(values.shape[0], size=n_clusters, replace=False)
-                else:
-                    init_idx = rng.choice(values.shape[0], size=n_clusters, replace=True)
-                centroids = values[init_idx]
+            def _kmeans(
+                values: np.ndarray,
+                n_clusters: int,
+                n_init: int,
+                max_iter: int,
+                random_state: int,
+            ) -> np.ndarray:
+                rng = np.random.default_rng(random_state)
+                best_labels = None
+                best_inertia = None
 
-                for _ in range(max_iter):
-                    distances = np.sum(
-                        (values[:, None, :] - centroids[None, :, :]) ** 2, axis=2
-                    )
-                    new_labels = np.argmin(distances, axis=1)
-                    new_centroids = centroids.copy()
-                    for k in range(n_clusters):
-                        mask = new_labels == k
-                        if not np.any(mask):
-                            new_centroids[k] = values[rng.integers(0, values.shape[0])]
-                        else:
-                            new_centroids[k] = values[mask].mean(axis=0)
-                    if np.allclose(new_centroids, centroids, atol=1e-6):
+                for _ in range(n_init):
+                    if values.shape[0] >= n_clusters:
+                        init_idx = rng.choice(values.shape[0], size=n_clusters, replace=False)
+                    else:
+                        init_idx = rng.choice(values.shape[0], size=n_clusters, replace=True)
+                    centroids = values[init_idx]
+
+                    for _ in range(max_iter):
+                        distances = np.sum(
+                            (values[:, None, :] - centroids[None, :, :]) ** 2, axis=2
+                        )
+                        new_labels = np.argmin(distances, axis=1)
+                        new_centroids = centroids.copy()
+                        for k in range(n_clusters):
+                            mask = new_labels == k
+                            if not np.any(mask):
+                                new_centroids[k] = values[rng.integers(0, values.shape[0])]
+                            else:
+                                new_centroids[k] = values[mask].mean(axis=0)
+                        if np.allclose(new_centroids, centroids, atol=1e-6):
+                            centroids = new_centroids
+                            break
                         centroids = new_centroids
-                        break
-                    centroids = new_centroids
 
-                inertia = np.sum((values - centroids[new_labels]) ** 2)
-                if best_inertia is None or inertia < best_inertia:
-                    best_inertia = inertia
-                    best_labels = new_labels.copy()
+                    inertia = np.sum((values - centroids[new_labels]) ** 2)
+                    if best_inertia is None or inertia < best_inertia:
+                        best_inertia = inertia
+                        best_labels = new_labels.copy()
 
-            return best_labels
+                return best_labels
 
-        X = _standardize(features.to_numpy(dtype=float))
-        labels = _kmeans(X, n_clusters=4, n_init=10, max_iter=100, random_state=42)
-        cluster_notice = "Clustering calculé sans scikit-learn (implémentation interne)."
-    except Exception as exc:
-        cluster_error = exc
+            X = _standardize(features.to_numpy(dtype=float))
+            labels = _kmeans(X, n_clusters=4, n_init=10, max_iter=100, random_state=42)
+            cluster_notice = "Clustering calculé sans scikit-learn (implémentation interne)."
+        except Exception as exc:
+            cluster_error = exc
 
-if cluster_error or labels is None:
-    detail = f"Détail: {cluster_error}" if cluster_error else "Détail: inconnu"
-    st.warning(
-        "Clustering indisponible (scikit-learn manquant ou erreur d'exécution). "
-        f"{detail}"
-    )
-else:
-    climate_df["cluster"] = labels.astype(int)
-    if cluster_notice:
-        st.info(cluster_notice)
-
-    cluster_means = climate_df.groupby("cluster")[
-        [temp_col, water_col, flood_col, "indice_total"]
-    ].mean()
-    cluster_sizes = climate_df["cluster"].value_counts()
-    cluster_score = cluster_means["indice_total"]
-    ordered_clusters = cluster_score.sort_values(ascending=False).index.tolist()
-    letters = ["A", "B", "C", "D"]
-    cluster_name_map = {
-        cluster_id: f"Type {letters[i]}"
-        for i, cluster_id in enumerate(ordered_clusters)
-    }
-    climate_df["cluster_name"] = climate_df["cluster"].map(cluster_name_map)
-
-    quantiles = {
-        temp_col: climate_df[temp_col].quantile([0.33, 0.66]).tolist(),
-        water_col: climate_df[water_col].quantile([0.33, 0.66]).tolist(),
-        flood_col: climate_df[flood_col].quantile([0.33, 0.66]).tolist(),
-    }
-
-    def _level(value: float, bounds: list[float]) -> str:
-        low, high = bounds
-        if value >= high:
-            return "élevé"
-        if value <= low:
-            return "faible"
-        return "moyen"
-
-    profiles = {}
-    for cluster_id, row in cluster_means.iterrows():
-        profiles[cluster_id] = (
-            f"{temp_label}: {_level(row[temp_col], quantiles[temp_col])} | "
-            f"{water_label}: {_level(row[water_col], quantiles[water_col])} | "
-            f"{flood_label}: {_level(row[flood_col], quantiles[flood_col])}"
+    if cluster_error or labels is None:
+        detail = f"Détail: {cluster_error}" if cluster_error else "Détail: inconnu"
+        st.warning(
+            "Clustering indisponible (scikit-learn manquant ou erreur d'exécution). "
+            f"{detail}"
         )
+    else:
+        cluster_df = climate_df.copy()
+        cluster_df["cluster"] = labels.astype(int)
+        if cluster_notice:
+            st.info(cluster_notice)
 
-    cluster_summary = (
-        cluster_means[[temp_col, water_col, flood_col, "indice_total"]]
-        .assign(
-            Type=lambda df: df.index.map(cluster_name_map),
-            Profil=lambda df: df.index.map(profiles),
-            Effectif=lambda df: df.index.map(cluster_sizes),
-        )
-        .reset_index(drop=True)
-    )
-    cluster_summary = cluster_summary[
-        ["Type", "Profil", "Effectif", temp_col, water_col, flood_col, "indice_total"]
-    ].rename(
-        columns={
-            temp_col: temp_label,
-            water_col: water_label,
-            flood_col: flood_label,
-            "indice_total": total_label,
+        cluster_means = cluster_df.groupby("cluster")[
+            [temp_col, water_col, flood_col, "indice_total"]
+        ].mean()
+        cluster_sizes = cluster_df["cluster"].value_counts()
+        ordered_clusters = cluster_means["indice_total"].sort_values(ascending=False).index.tolist()
+        letters = ["A", "B", "C", "D"]
+        cluster_name_map = {
+            cluster_id: f"Type {letters[i]}"
+            for i, cluster_id in enumerate(ordered_clusters)
         }
-    )
+        cluster_df["cluster_name"] = cluster_df["cluster"].map(cluster_name_map)
 
-    centroids = cluster_means[[temp_col, water_col, flood_col]]
-    example_rows = []
-    for cluster_id in ordered_clusters:
-        centroid = centroids.loc[cluster_id]
-        subset = climate_df[climate_df["cluster"] == cluster_id].copy()
-        distances = (
-            (subset[[temp_col, water_col, flood_col]] - centroid) ** 2
-        ).sum(axis=1)
-        examples = (
-            subset.assign(_dist=distances)
-            .nsmallest(3, "_dist")["departement_label"]
-            .tolist()
+        quantiles = {
+            temp_col: cluster_df[temp_col].quantile([0.33, 0.66]).tolist(),
+            water_col: cluster_df[water_col].quantile([0.33, 0.66]).tolist(),
+            flood_col: cluster_df[flood_col].quantile([0.33, 0.66]).tolist(),
+        }
+
+        def _level(value: float, bounds: list[float]) -> str:
+            low, high = bounds
+            if value >= high:
+                return "élevé"
+            if value <= low:
+                return "faible"
+            return "moyen"
+
+        profiles = {}
+        for cluster_id, row in cluster_means.iterrows():
+            profiles[cluster_id] = (
+                f"{temp_label}: {_level(row[temp_col], quantiles[temp_col])} | "
+                f"{water_label}: {_level(row[water_col], quantiles[water_col])} | "
+                f"{flood_label}: {_level(row[flood_col], quantiles[flood_col])}"
+            )
+
+        cluster_summary = (
+            cluster_means[[temp_col, water_col, flood_col, "indice_total"]]
+            .assign(
+                Type=lambda df: df.index.map(cluster_name_map),
+                Profil=lambda df: df.index.map(profiles),
+                Effectif=lambda df: df.index.map(cluster_sizes),
+            )
+            .reset_index(drop=True)
         )
-        example_rows.append(
-            {
-                "Type": cluster_name_map[cluster_id],
-                "Exemples": ", ".join(examples),
+        cluster_summary = cluster_summary[
+            ["Type", "Profil", "Effectif", temp_col, water_col, flood_col, "indice_total"]
+        ].rename(
+            columns={
+                temp_col: temp_label,
+                water_col: water_label,
+                flood_col: flood_label,
+                "indice_total": total_label,
             }
         )
-    examples_df = pd.DataFrame(example_rows)
 
-    fig_cluster = px.scatter(
-        climate_df,
-        x=temp_col,
-        y=water_col,
-        color="cluster_name",
-        color_discrete_sequence=["#22c55e", "#38bdf8", "#f97316", "#a855f7"],
-        labels={temp_col: temp_label, water_col: water_label},
-        custom_data=[
-            "departement_label",
-            temp_col,
-            water_col,
-            flood_col,
-            "cluster_name",
-        ],
-        category_orders={
-            "cluster_name": [cluster_name_map[c] for c in ordered_clusters]
-        },
-    )
-    fig_cluster.update_traces(
-        hovertemplate=cluster_hover_template, marker={"size": 7, "opacity": 0.9}
-    )
-    fig_cluster.update_layout(
-        template="plotly_dark",
-        height=420,
-        margin=dict(l=20, r=20, t=20, b=20),
-        legend_title_text="Cluster",
-    )
-    st.plotly_chart(fig_cluster, use_container_width=True)
+        centroids = cluster_means[[temp_col, water_col, flood_col]]
+        example_rows = []
+        for cluster_id in ordered_clusters:
+            centroid = centroids.loc[cluster_id]
+            subset = cluster_df[cluster_df["cluster"] == cluster_id].copy()
+            distances = (
+                (subset[[temp_col, water_col, flood_col]] - centroid) ** 2
+            ).sum(axis=1)
+            examples = (
+                subset.assign(_dist=distances)
+                .nsmallest(3, "_dist")["departement_label"]
+                .tolist()
+            )
+            example_rows.append(
+                {
+                    "Type": cluster_name_map[cluster_id],
+                    "Exemples": ", ".join(examples),
+                }
+            )
+        examples_df = pd.DataFrame(example_rows)
 
-    st.caption(
-        f"Clusters basés sur {temp_label}, {water_label} et {flood_label}. "
-        "Les types sont ordonnés du score global le plus élevé au plus faible."
-    )
-    st.dataframe(
-        cluster_summary,
-        use_container_width=True,
-        hide_index=True,
-    )
-    st.caption("Exemples de départements proches des centres de cluster.")
-    st.dataframe(
-        examples_df,
-        use_container_width=True,
-        hide_index=True,
-    )
+        fig_cluster = px.scatter_3d(
+            cluster_df,
+            x=temp_col,
+            y=water_col,
+            z=flood_col,
+            color="cluster_name",
+            color_discrete_sequence=["#22c55e", "#38bdf8", "#f97316", "#a855f7"],
+            labels={
+                temp_col: temp_label,
+                water_col: water_label,
+                flood_col: flood_label,
+            },
+            custom_data=[
+                "departement_label",
+                temp_col,
+                water_col,
+                flood_col,
+                "cluster_name",
+            ],
+            category_orders={
+                "cluster_name": [cluster_name_map[c] for c in ordered_clusters]
+            },
+        )
+        fig_cluster.update_traces(
+            hovertemplate=cluster_hover_template,
+            marker={"size": 5, "opacity": 0.18 if has_selection else 0.85},
+        )
+
+        if has_selection:
+            for code in selected_dept_codes:
+                selected_row = cluster_df[cluster_df["code"] == code]
+                if selected_row.empty:
+                    continue
+                fig_cluster.add_trace(
+                    go.Scatter3d(
+                        x=selected_row[temp_col],
+                        y=selected_row[water_col],
+                        z=selected_row[flood_col],
+                        mode="markers",
+                        name=selected_row["departement_label"].iloc[0],
+                        showlegend=False,
+                        customdata=selected_row[
+                            [
+                                "departement_label",
+                                temp_col,
+                                water_col,
+                                flood_col,
+                                "cluster_name",
+                            ]
+                        ].to_numpy(),
+                        hovertemplate=cluster_hover_template,
+                        marker={
+                            "size": 8,
+                            "color": selected_color_map.get(code, "#f8fafc"),
+                            "line": {"color": "#ffffff", "width": 3},
+                            "opacity": 1,
+                        },
+                    )
+                )
+
+        fig_cluster.update_layout(
+            template="plotly_dark",
+            height=560,
+            margin=dict(l=20, r=20, t=20, b=20),
+            legend_title_text="Cluster",
+            scene={
+                "xaxis_title": temp_label,
+                "yaxis_title": water_label,
+                "zaxis_title": flood_label,
+            },
+        )
+        st.plotly_chart(fig_cluster, use_container_width=True)
+
+        st.caption(
+            f"Clusters basés sur {temp_label}, {water_label} et {flood_label}. "
+            "Les types sont ordonnés du score global le plus élevé au plus faible."
+        )
+        st.dataframe(
+            cluster_summary,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        if has_selection:
+            selected_cluster_view = cluster_df[
+                cluster_df["code"].isin(selected_dept_codes)
+            ].copy()
+            selected_cluster_view["selection_order"] = selected_cluster_view["code"].map(
+                selected_order_map
+            )
+            selected_cluster_view = selected_cluster_view.sort_values("selection_order")
+            st.caption("Positionnement cluster des départements sélectionnés.")
+            st.dataframe(
+                selected_cluster_view[
+                    [
+                        "departement",
+                        "code",
+                        "cluster_name",
+                        temp_col,
+                        water_col,
+                        flood_col,
+                        "indice_total",
+                    ]
+                ].rename(
+                    columns={
+                        "cluster_name": "Type",
+                        temp_col: temp_label,
+                        water_col: water_label,
+                        flood_col: flood_label,
+                        "indice_total": total_label,
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        st.caption("Exemples de départements proches des centres de cluster.")
+        st.dataframe(
+            examples_df,
+            use_container_width=True,
+            hide_index=True,
+        )
 ######
