@@ -332,6 +332,18 @@ def _score_education():
     ]
 
 
+def _score_transition_demographique():
+    df = charger_csv("pages/tables/Old_df.csv")
+    df["code"] = df["code"].astype(str).str.strip().str.upper()
+    df["code"] = df["code"].apply(lambda code: code.zfill(2) if code.isdigit() else code)
+    df = df[df["code"] != "M"].copy()
+    df["indice de vieillissement"] = pd.to_numeric(df["indice de vieillissement"], errors="coerce")
+    df["Score transition démographique"] = df["indice de vieillissement"].round(4)
+    return df.rename(columns={"Departement": "Département"})[
+        ["Département", "Score transition démographique", "indice de vieillissement"]
+    ]
+
+
 def _score_immobilier():
     df = charger_csv("pages/tables/Real_Estate_Prices.csv", sep=";")
     df["Coefficient"] = pd.to_numeric(df["Coefficient"], errors="coerce")
@@ -352,6 +364,7 @@ def calculer_scores_departements():
     score_internet = _score_internet()
     score_criminalite = _score_criminalite()
     score_education = _score_education()
+    score_transition_demographique = _score_transition_demographique()
     score_immobilier = _score_immobilier()
 
     scores = score_revenu.merge(score_emploi, on="Département", how="left")
@@ -361,6 +374,7 @@ def calculer_scores_departements():
     scores = scores.merge(score_internet, on="Département", how="left")
     scores = scores.merge(score_criminalite, on="Département", how="left")
     scores = scores.merge(score_education, on="Département", how="left")
+    scores = scores.merge(score_transition_demographique, on="Département", how="left")
     scores = scores.merge(score_immobilier, on="Département", how="left")
 
     scores["Score global"] = _moyenne_ponderee_disponible(
@@ -374,6 +388,7 @@ def calculer_scores_departements():
             "Score internet": 1.0,
             "Score criminalité": 1.0,
             "Score éducation": 1.0,
+            "Score transition démographique": 1.0,
             "Score immobilier": 1.0,
         },
     )
